@@ -1,4 +1,6 @@
-# LangKeys
+# 🎏 LangKeys
+
+https://github.com/user-attachments/assets/e6bf3f73-97b2-4fe5-a6be-6321ff793f76
 
 Tap a modifier key **on its own** to switch keyboard input source. Hold it as part of a shortcut
 (⌘C, ⌥←) and nothing happens.

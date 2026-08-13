@@ -83,7 +83,13 @@ if [[ "$MODE" == "--release" ]]; then
     umask 077
     printf '%s\n' "$APPLE_API_KEY" > "$KEY_FILE"
   fi
-  cleanup() { [[ "$CLEANUP_KEY" == 1 ]] && rm -f "$KEY_FILE"; }
+  # This has to end on a success: a `[[ ... ]] && rm` that short-circuits leaves the trap
+  # failing, and a failing EXIT trap overrides the script's own exit 0 — a fully successful
+  # release then reports failure, which is exactly what it did in CI.
+  cleanup() {
+    if [[ "$CLEANUP_KEY" == 1 ]]; then rm -f "$KEY_FILE"; fi
+    return 0
+  }
   trap cleanup EXIT
 
   echo "==> Signing with Developer ID (hardened runtime)"

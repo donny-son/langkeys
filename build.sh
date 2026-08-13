@@ -11,13 +11,29 @@ APP="build/LangKeys.app"
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Resources/Info.plist)"
 MODE="${1:-}"
 
-echo "==> Building (universal release)"
-swift build -c release --arch arm64 --arch x86_64
+# A universal build is driven by Xcode's build system, and SwiftPM looks for xcbuild at a
+# fixed spot under the selected developer directory. The Command Line Tools don't ship it,
+# so fall back to a build for whichever arch this machine runs.
+XCBUILD="$(xcode-select -p 2>/dev/null || true)/../SharedFrameworks/XCBuild.framework/Versions/A/Support/xcbuild"
+if [[ -x "$XCBUILD" ]]; then
+  UNIVERSAL=1
+  echo "==> Building (universal release)"
+  swift build -c release --arch arm64 --arch x86_64
+  BIN=".build/apple/Products/Release/LangKeys"
+else
+  # No xcbuild, so no universal binary — build for whichever arch this machine runs and
+  # let SwiftPM report the output path, which differs from the Xcode build system's.
+  UNIVERSAL=0
+  ARCH="$(uname -m)"
+  echo "==> Building (release, $ARCH only — universal needs full Xcode, not just the CLT)"
+  swift build -c release --arch "$ARCH"
+  BIN="$(swift build -c release --arch "$ARCH" --show-bin-path)/LangKeys"
+fi
 
 echo "==> Assembling $APP"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp .build/apple/Products/Release/LangKeys "$APP/Contents/MacOS/LangKeys"
+cp "$BIN" "$APP/Contents/MacOS/LangKeys"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
@@ -33,6 +49,10 @@ make_dmg() {
 }
 
 if [[ "$MODE" == "--release" ]]; then
+  if [[ "$UNIVERSAL" == 0 ]]; then
+    echo "⚠️  This build is $(uname -m) only, so the DMG won't run on other Macs."
+    echo "    Install Xcode and 'sudo xcode-select -s /Applications/Xcode.app' for a universal build."
+  fi
   [[ -f .env ]] || { echo "❌ .env missing (see .env.example)"; exit 1; }
   set -a; source .env; set +a
   : "${APPLE_API_KEY:?not set in .env}" "${APPLE_API_KEY_ID:?not set in .env}"

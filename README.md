@@ -41,6 +41,11 @@ The menu bar icon can be hidden entirely — relaunch LangKeys from Spotlight to
 ./build.sh --release     # Developer ID + notarized DMG, for handing to other people
 ```
 
+Builds are universal (arm64 + x86_64) when full Xcode is installed. With only the Command Line
+Tools there's no `xcbuild`, so the script builds for this machine's own architecture instead —
+fine for `--install` and `--dmg` on your own Macs, and `--release` warns that the DMG won't run
+elsewhere.
+
 `--release` reads App Store Connect credentials from a gitignored `.env` (see `.env.example`):
 `APPLE_API_KEY` (path or key contents), `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`, `APPLE_TEAM_ID`.
 It notarizes in two passes — app first, then the DMG built from the stapled app — so the app still

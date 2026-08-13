@@ -10,11 +10,41 @@ from the menu.
 
 ```sh
 ./build.sh --install     # builds, copies to /Applications, launches
+./build.sh --dmg         # builds, packages build/LangKeys-<version>.dmg
 ./build.sh               # just builds build/LangKeys.app
 ```
 
 Then grant **System Settings → Privacy & Security → Accessibility → LangKeys**. The app polls
 every two seconds, so it starts working as soon as the toggle flips — no relaunch needed.
+
+Because the app is ad-hoc signed, macOS drops that grant whenever the binary changes — expect to
+re-approve it after a rebuild.
+
+## Distributing
+
+`./build.sh --dmg` stages the app next to an `/Applications` symlink and runs `hdiutil create`,
+giving the usual drag-to-install window.
+
+That DMG is fine for your own machines, but on someone else's Mac Gatekeeper will refuse it
+(ad-hoc signature, not notarized) and they will have to right-click → Open. For real distribution
+you need a paid Apple Developer account, then:
+
+```sh
+# 1. sign with your Developer ID instead of the ad-hoc `-` identity
+codesign --force --options runtime --timestamp \
+  --sign "Developer ID Application: Your Name (TEAMID)" build/LangKeys.app
+
+# 2. build the DMG, then notarize and staple it
+./build.sh --dmg
+xcrun notarytool submit build/LangKeys-1.0.dmg --keychain-profile "AC_PASSWORD" --wait
+xcrun stapler staple build/LangKeys-1.0.dmg
+```
+
+Store the credentials once with
+`xcrun notarytool store-credentials "AC_PASSWORD" --apple-id … --team-id … --password …`
+(an app-specific password).
+
+Signing with a real Developer ID also makes the Accessibility grant stick across updates.
 
 ## Using it
 
@@ -22,11 +52,27 @@ The menu bar shows the current input source's flag (🇺🇸, 🇰🇷, …), fa
 for languages with no obvious country. Clicking it gives you:
 
 - a row per modifier key (Right/Left ⌘ ⌥ ⇧ ⌃ and Fn) with a submenu of your enabled input
-  sources — pick one, or None to unassign
+  sources — pick one, or None to unassign — plus which side of the notch its flag pops out of
 - **Enabled** — pause the key handling without quitting
+- **Show Flag in Notch** — turn the notch flag off
 - **Open at Login** — registers the app as a login item via `SMAppService`
+- **Settings…** (⌘,) — the full settings window
 
 The icon dims when the app is paused or missing Accessibility permission.
+
+## Settings
+
+Three tabs:
+
+- **Keys** — every modifier key, its input source, and which side of the notch its flag uses
+- **Notch** — turn the flag on or off, and choose whether it **stays visible** (the default, so
+  the current input mode is always on screen) or **disappears** after an adjustable 0.5–6s
+- **General** — pause switching, show/hide the menu bar icon, open at login, quit
+
+**The menu bar icon can be hidden entirely.** When it is, open the settings window again by
+launching LangKeys from Spotlight, Finder, or the Dock — a relaunch of the running app reopens
+settings rather than starting a second copy (`applicationShouldHandleReopen`). Settings also open
+automatically at launch when the icon is hidden, so the app is never unreachable.
 
 ## How it works
 
@@ -38,6 +84,38 @@ press→release fires `TISSelectInputSource`.
 
 The tap is listen-only, so it never delays or swallows your keystrokes. If macOS disables it for
 being slow, the callback re-arms it.
+
+## The notch HUD
+
+On a switch, the black notch body stretches out one side and the flag springs out from behind it.
+By default it stays there, so a glance at the notch tells you the current input mode; set it to
+auto-hide in Settings → Notch. Right ⌘ shows 🇺🇸 on the left, Right ⌥ shows 🇰🇷 on the right; only
+one flag is ever out, and switching sides mid-flight tucks the first one in first.
+
+In the pinned mode the notch also follows switches made *outside* LangKeys — the input menu, ⌃Space,
+another app — by watching the same system notification the menu bar item uses.
+
+Preview it without pressing anything:
+
+```sh
+./build/LangKeys.app/Contents/MacOS/LangKeys --preview-notch
+```
+
+The window and notch geometry are adapted from [TheBoredTeam/boring.notch](https://github.com/TheBoredTeam/boring.notch):
+
+- `NotchShape` — the notch silhouette (boring.notch's `NotchShape.swift`, itself from
+  [DynamicNotchKit](https://github.com/MrKai77/DynamicNotchKit))
+- `NotchGeometry` — notch width from `auxiliaryTopLeftArea`/`auxiliaryTopRightArea`, height from
+  `safeAreaInsets.top`, following `getClosedNotchSize()`; falls back to a 185×32 pill on displays
+  with no notch
+- `NotchPanel` — a non-activating `NSPanel` at `.mainMenu + 3` with
+  `[.fullScreenAuxiliary, .stationary, .canJoinAllSpaces, .ignoresCycle]`, mirroring
+  `BoringNotchWindow`
+
+The rest is ours: the body grows on one side only (width and offset animate together so the
+opposite edge stays pinned to the real cutout), and the flag rides out on a slightly slower,
+lower-damped spring so it lags the stretch. The flag view stays mounted while hidden — inserting
+it on show would make it appear at its final position instead of sliding out.
 
 ## App icon
 

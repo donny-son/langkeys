@@ -10,6 +10,9 @@ final class EventTapController {
     private var pendingKey: ModifierKey?
     private var pendingWasUsedInCombo = false
 
+    /// Called on the main queue after a lone tap has selected an input source.
+    var onSwitch: ((ModifierKey, String) -> Void)?
+
     var isRunning: Bool { tap != nil }
 
     @discardableResult
@@ -100,7 +103,10 @@ final class EventTapController {
             guard wasLoneTap, Preferences.shared.isEnabled,
                 let sourceID = Preferences.shared.inputSourceID(for: key)
             else { return }
-            DispatchQueue.main.async { InputSourceManager.select(id: sourceID) }
+            DispatchQueue.main.async { [weak self] in
+                InputSourceManager.select(id: sourceID)
+                self?.onSwitch?(key, sourceID)
+            }
         }
     }
 

@@ -1,9 +1,10 @@
 import AppKit
-import ServiceManagement
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private let tapController = EventTapController()
+    private let notchHUD = NotchHUD()
+    private let settingsController = SettingsWindowController()
     private var permissionTimer: Timer?
     private var selectionObserver: NSObjectProtocol?
 
@@ -15,13 +16,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         statusItem.menu = menu
 
+        settingsController.onOpenAccessibilitySettings = { [weak self] in
+            self?.requestAccessibilityPermission()
+        }
+
+        tapController.onSwitch = { [weak self] key, sourceID in
+            self?.presentNotchHUD(for: key, sourceID: sourceID)
+        }
+
+        // A pinned flag has to survive a display change, which forces the panel to be rebuilt.
+        notchHUD.pinnedFlagProvider = { [weak self] in
+            guard Preferences.shared.showsNotchHUD, Preferences.shared.flagStaysVisible else {
+                return nil
+            }
+            return self?.currentFlagAndSide()
+        }
+
         selectionObserver = InputSourceManager.observeSelectionChange { [weak self] in
             self?.updateStatusTitle()
+            self?.pinCurrentFlagIfNeeded()
         }
-        Preferences.shared.onChange = { [weak self] in self?.updateStatusTitle() }
+        Preferences.shared.onChange = { [weak self] in self?.applyPreferences() }
 
-        updateStatusTitle()
+        applyPreferences()
         startTapOrWaitForPermission()
+        pinCurrentFlagIfNeeded()
+
+        // With no menu bar icon there is nothing to click, so open settings on launch.
+        if !Preferences.shared.showsMenuBarIcon {
+            settingsController.show()
+        }
+
+        // Developer aid: `LangKeys --preview-notch` plays the animation without needing a
+        // real keystroke (or Accessibility permission).
+        if CommandLine.arguments.contains("--preview-notch") {
+            let sources = InputSourceManager.available()
+            let flags = sources.compactMap(\.flag)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                self?.notchHUD.show(flag: flags.first ?? "🇺🇸", on: .left)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
+                self?.notchHUD.show(flag: flags.dropFirst().first ?? "🇰🇷", on: .right)
+            }
+        }
+    }
+
+    /// Clicking the app in Spotlight, Finder, or the Dock while it is already running.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        settingsController.show()
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -58,6 +101,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
             )!)
         startTapOrWaitForPermission()
+    }
+
+    // MARK: - Notch HUD
+
+    private func presentNotchHUD(for key: ModifierKey, sourceID: String) {
+        guard Preferences.shared.showsNotchHUD else { return }
+        // The switch has just landed, so the current source is the one we want a flag for.
+        let source =
+            InputSourceManager.current().flatMap { $0.id == sourceID ? $0 : nil }
+            ?? InputSourceManager.available().first { $0.id == sourceID }
+        guard let flag = source?.flag ?? source?.badge else { return }
+        notchHUD.show(flag: flag, on: Preferences.shared.notchSide(for: key))
+    }
+
+    /// The flag for whatever input source is active now, and the side it belongs on.
+    private func currentFlagAndSide() -> (flag: String, side: NotchSide)? {
+        guard let source = InputSourceManager.current() else { return nil }
+        guard let flag = source.flag ?? source.badge as String? else { return nil }
+        return (flag, Preferences.shared.notchSide(forSourceID: source.id))
+    }
+
+    /// In pinned mode the notch mirrors the input source however it was changed — a key tap,
+    /// the input menu, or another app.
+    private func pinCurrentFlagIfNeeded() {
+        guard Preferences.shared.showsNotchHUD, Preferences.shared.flagStaysVisible,
+            let pinned = currentFlagAndSide()
+        else { return }
+        notchHUD.show(flag: pinned.flag, on: pinned.side)
+    }
+
+    /// Pushes preference changes into the pieces that cannot observe them directly.
+    private func applyPreferences() {
+        updateStatusTitle()
+        statusItem.isVisible = Preferences.shared.showsMenuBarIcon
+
+        if Preferences.shared.showsNotchHUD {
+            notchHUD.applyDwellSettings()
+            pinCurrentFlagIfNeeded()
+        } else {
+            notchHUD.hideImmediately()
+        }
     }
 
     // MARK: - Status item
@@ -123,13 +207,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         enabled.state = Preferences.shared.isEnabled ? .on : .off
         menu.addItem(enabled)
 
+        let hud = NSMenuItem(
+            title: "Show Flag in Notch", action: #selector(toggleNotchHUD), keyEquivalent: "")
+        hud.target = self
+        hud.state = Preferences.shared.showsNotchHUD ? .on : .off
+        menu.addItem(hud)
+
         let login = NSMenuItem(
             title: "Open at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
         login.target = self
-        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        login.state = LoginItem.isEnabled ? .on : .off
         menu.addItem(login)
 
         menu.addItem(.separator())
+
+        let settings = NSMenuItem(
+            title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
+
         let quit = NSMenuItem(
             title: "Quit LangKeys", action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q")
@@ -164,6 +260,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             submenu.addItem(disabledItem("Unavailable: \(assignedID)"))
         }
 
+        submenu.addItem(.separator())
+        submenu.addItem(disabledItem("Flag appears at"))
+        let currentSide = Preferences.shared.notchSide(for: key)
+        for side in [NotchSide.left, .right] {
+            let sideItem = NSMenuItem(
+                title: side == .left ? "Left of Notch" : "Right of Notch",
+                action: #selector(assignSide(_:)), keyEquivalent: "")
+            sideItem.target = self
+            sideItem.representedObject = SideChoice(key: key, side: side)
+            sideItem.state = side == currentSide ? .on : .off
+            submenu.addItem(sideItem)
+        }
+
         item.submenu = submenu
         item.attributedTitle = attributedMapping(
             key: key, value: assigned?.displayName ?? (assignedID == nil ? "—" : "unavailable"))
@@ -192,27 +301,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let sourceID: String?
     }
 
+    private struct SideChoice {
+        let key: ModifierKey
+        let side: NotchSide
+    }
+
     @objc private func assignSource(_ sender: NSMenuItem) {
         guard let assignment = sender.representedObject as? Assignment else { return }
         Preferences.shared.setInputSource(assignment.sourceID, for: assignment.key)
+    }
+
+    @objc private func assignSide(_ sender: NSMenuItem) {
+        guard let choice = sender.representedObject as? SideChoice else { return }
+        Preferences.shared.setNotchSide(choice.side, for: choice.key)
+        // Show the result straight away so the choice is obvious.
+        if let sourceID = Preferences.shared.inputSourceID(for: choice.key),
+            let source = InputSourceManager.available().first(where: { $0.id == sourceID }),
+            let flag = source.flag ?? source.badge as String?
+        {
+            notchHUD.show(flag: flag, on: choice.side)
+        }
     }
 
     @objc private func toggleEnabled() {
         Preferences.shared.isEnabled.toggle()
     }
 
+    @objc private func toggleNotchHUD() {
+        Preferences.shared.showsNotchHUD.toggle()
+    }
+
     @objc private func toggleLaunchAtLogin() {
-        do {
-            if SMAppService.mainApp.status == .enabled {
-                try SMAppService.mainApp.unregister()
-            } else {
-                try SMAppService.mainApp.register()
-            }
-        } catch {
-            let alert = NSAlert(error: error)
-            alert.messageText = "Could not change the login item"
-            alert.runModal()
-        }
+        LoginItem.setEnabled(!LoginItem.isEnabled)
+    }
+
+    @objc private func openSettings() {
+        settingsController.show()
     }
 
     @objc private func openAccessibilitySettings() {

@@ -29,6 +29,16 @@ enum ModifierKey: Int64, CaseIterable, Codable {
         }
     }
 
+    /// Side of the notch this key's flag pops out of unless the user picks otherwise.
+    /// Command and Shift lean left, Option and Control lean right, so the two keys people
+    /// usually pair up (Right ⌘ / Right ⌥) land on opposite sides.
+    var defaultNotchSide: NotchSide {
+        switch self {
+        case .rightCommand, .leftCommand, .rightShift, .leftShift: return .left
+        case .rightOption, .leftOption, .rightControl, .leftControl, .function: return .right
+        }
+    }
+
     /// Device-dependent flag bit that is set while this specific physical key is held.
     /// Lets us tell a press apart from a release without keeping a toggle guess.
     var flagBit: UInt64 {

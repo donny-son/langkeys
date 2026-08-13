@@ -67,14 +67,43 @@ enum InputSourceManager {
     private static func describe(_ source: TISInputSource) -> InputSource? {
         guard let id = property(source, kTISPropertyInputSourceID) as? String else { return nil }
         let name = property(source, kTISPropertyLocalizedName) as? String ?? id
-        let languages = property(source, kTISPropertyInputSourceLanguages) as? [String] ?? []
-        let badge = (languages.first.map { String($0.prefix(2)) } ?? String(name.prefix(2)))
-            .uppercased()
         let iconURL = property(source, kTISPropertyIconImageURL) as? URL
+        let language = language(of: source, id: id)
+        let badge = (language.map { String($0.prefix(2)) } ?? String(name.prefix(2)))
+            .uppercased()
         return InputSource(
             id: id, name: name, badge: badge,
-            flag: languages.first.flatMap(FlagLookup.flag(forLanguage:)), iconURL: iconURL)
+            flag: language.flatMap(FlagLookup.flag(forLanguage:)), iconURL: iconURL)
     }
+
+    /// The language this source types in, or nil when it belongs to no single language.
+    ///
+    /// `kTISPropertyInputSourceLanguages` is not as tidy as it looks: several Korean and
+    /// Chinese layouts report `[""]`, and language-neutral ones like Unicode Hex Input report
+    /// every language macOS knows.
+    private static func language(of source: TISInputSource, id: String) -> String? {
+        let languages = property(source, kTISPropertyInputSourceLanguages) as? [String] ?? []
+        // The first entry is the source's own language, and every later entry is just
+        // something the layout happens to be able to type — ABC lists twenty of them.
+        if let first = languages.first, !first.isEmpty { return first }
+        // An empty first entry followed by the whole world means the layout belongs to no
+        // language at all (Unicode Hex Input). A short list means macOS simply left the
+        // language off a layout that has one, so recover it from the ID.
+        if languages.count > languageClaimLimit { return nil }
+        return languageByIDKeyword.first { id.localizedCaseInsensitiveContains($0.keyword) }?
+            .language
+    }
+
+    /// An unlabelled source listing more languages than this belongs to none of them.
+    private static let languageClaimLimit = 5
+
+    /// Recovers the language of the layouts that declare none, by the script named in their
+    /// source ID. Ordered: "TraditionalPinyin" has to lose to "Traditional".
+    private static let languageByIDKeyword: [(keyword: String, language: String)] = [
+        ("Hangul", "ko"), ("Korean", "ko"), ("Romaja", "ko"),
+        ("Traditional", "zh-Hant"), ("Zhuyin", "zh-Hant"), ("Cangjie", "zh-Hant"),
+        ("Pinyin", "zh-Hans"), ("Wubi", "zh-Hans"),
+    ]
 
     private static func property(_ source: TISInputSource, _ key: CFString?) -> Any? {
         guard let key, let pointer = TISGetInputSourceProperty(source, key) else { return nil }

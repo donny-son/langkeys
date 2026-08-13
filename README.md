@@ -33,6 +33,58 @@ or auto-hide after 0.5–6s), **General** (pause, hide menu bar icon, login item
 
 The menu bar icon can be hidden entirely — relaunch LangKeys from Spotlight to reopen settings.
 
+## Languages
+
+LangKeys has no language list of its own — it picks up whatever you enable in **System Settings →
+Keyboard → Input Sources**, and works out the flag from the input source's language. That covers
+every one of the 135 languages macOS ships a keyboard for:
+
+| | | | |
+|---|---|---|---|
+| 🇯🇵 Ainu | 🇫🇷 French | 🇱🇹 Lithuanian | 🇮🇳 Sanskrit |
+| 🇬🇭 Akan | 🇬🇳 Fula | 🇸🇪 Lule Sami | 🇮🇳 Santali |
+| 🇦🇱 Albanian | 🇬🇪 Georgian | 🇺🇸 Lushootseed | 🇷🇸 Serbian |
+| 🇪🇹 Amharic | 🇩🇪 German | 🇲🇰 Macedonian | 🇵🇰 Sindhi |
+| 🇺🇸 Apache, Western | 🇬🇷 Greek | 🇮🇳 Maithili | 🇱🇰 Sinhala |
+| 🇸🇦 Arabic | 🇮🇳 Gujarati | 🇲🇾 Malay | 🇫🇮 Skolt Sami |
+| 🇦🇲 Armenian | 🇭🇹 Haitian Creole | 🇮🇳 Malayalam | 🇸🇰 Slovak |
+| 🇮🇳 Assamese | 🇳🇬 Hausa | 🇲🇹 Maltese | 🇸🇮 Slovenian |
+| 🇮🇶 Assyrian | 🇺🇸 Hawaiian | 🇮🇶 Mandaic | 🇸🇪 South Sámi |
+| 🇦🇿 Azerbaijani | 🇮🇱 Hebrew | 🇮🇳 Manipuri | 🇪🇸 Spanish |
+| 🇧🇩 Bangla | 🇮🇳 Hindi | 🇳🇿 Māori | 🇸🇪 Swedish |
+| 🇧🇾 Belarusian | 🇨🇳 Hmong | 🇮🇳 Marathi | 🇹🇯 Tajik |
+| 🇮🇳 Bodo | 🇭🇺 Hungarian | 🇨🇦 Mi’kmaw | 🇲🇦 Tamazight |
+| 🇧🇬 Bulgarian | 🇮🇸 Icelandic | 🇲🇳 Mongolian | 🇮🇳 Tamil |
+| 🇲🇲 Burmese | 🇳🇬 Igbo | 🇺🇸 Mvskoke | 🇮🇳 Telugu |
+| 🇭🇰 Cantonese | 🇫🇮 Inari Sami | 🇬🇳 N’Ko | 🇹🇭 Thai |
+| 🇺🇸 Cherokee | 🇷🇺 Ingush | 🇺🇸 Navajo | 🇨🇳 Tibetan |
+| 🇺🇸 Chickasaw | 🇨🇦 Inuktitut | 🇳🇵 Nepali | 🇹🇴 Tongan |
+| 🇨🇳 Chinese (Simplified) | 🇮🇪 Irish | 🇺🇸 Nez Perce | 🇹🇷 Turkish |
+| 🇹🇼 Chinese (Traditional) | 🇮🇹 Italian | 🇳🇴 North Sámi | 🇹🇲 Turkmen |
+| 🇺🇸 Chochenyo | 🇯🇵 Japanese | 🇳🇴 Norwegian Bokmål | 🇺🇦 Ukrainian |
+| 🇺🇸 Choctaw | 🇩🇿 Kabyle | 🇮🇳 Odia | 🇸🇪 Ume Sámi |
+| 🇷🇺 Chuvash | 🇮🇳 Kannada | 🇺🇸 Osage | 🇵🇰 Urdu |
+| 🇭🇷 Croatian | 🇮🇳 Kashmiri | 🇦🇫 Pashto | 🇨🇳 Uyghur |
+| 🇨🇿 Czech | 🇰🇿 Kazakh | 🇮🇷 Persian | 🇺🇿 Uzbek |
+| 🇩🇰 Danish | 🇰🇭 Khmer | 🇸🇪 Pite Sámi | 🇦🇫 Uzbek (Afghan) |
+| 🇲🇻 Dhivehi | 🇷🇺 Kildin Sámi | 🇵🇱 Polish | 🇻🇳 Vietnamese |
+| 🇮🇳 Dogri | 🇮🇳 Konkani | 🇧🇷 Portuguese | 🇮🇳 Wancho |
+| 🇳🇱 Dutch | 🇰🇷 Korean | 🇮🇳 Punjabi | 🇬🇧 Welsh |
+| 🇧🇹 Dzongkha | 🇹🇷 Kurdish | 🇮🇩 Rejang | 🇲🇽 Wixárika |
+| 🇺🇸 English | 🇮🇶 Kurdish (Sorani) | 🇲🇲 Rohingya | 🇨🇦 Wolastoqey |
+| 🇪🇪 Estonian | 🇰🇬 Kyrgyz | 🇷🇴 Romanian | 🇮🇱 Yiddish |
+| 🇫🇴 Faroese | 🇱🇦 Lao | 🇷🇺 Russian | 🇳🇬 Yoruba |
+| 🇫🇮 Finnish | 🇱🇻 Latvian | 🇼🇸 Samoan | |
+
+Flags come from the language's most likely region, so 🇺🇸 covers `en` and 🇧🇷 covers `pt` unless the
+input source names a region of its own (British is 🇬🇧, Canadian French is 🇨🇦). A language with no
+sensible flag falls back to a two-letter badge — Unicode Hex Input, which belongs to no language,
+shows `UN`.
+
+Every layout for a language shares that language's flag: 2-Set Korean, 3-Set Korean, and
+GongjinCheong Romaja are all 🇰🇷, and you can map any of them to a key. Only nine input sources can
+be mapped at once, one per modifier key.
+
 ## Build options
 
 ```sh

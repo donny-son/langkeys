@@ -11,11 +11,11 @@ APP="build/LangKeys.app"
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Resources/Info.plist)"
 MODE="${1:-}"
 
-# A universal build is driven by Xcode's build system, and SwiftPM looks for xcbuild at a
-# fixed spot under the selected developer directory. The Command Line Tools don't ship it,
-# so fall back to a build for whichever arch this machine runs.
-XCBUILD="$(xcode-select -p 2>/dev/null || true)/../SharedFrameworks/XCBuild.framework/Versions/A/Support/xcbuild"
-if [[ -x "$XCBUILD" ]]; then
+# A universal build is driven by Xcode's build system, so it needs full Xcode selected, not
+# just the Command Line Tools. Asking xcodebuild is the test that keeps working: probing for
+# xcbuild inside XCBuild.framework used to answer this, but recent Xcode no longer ships that
+# binary, and the check then quietly downgraded every build to a single architecture.
+if xcodebuild -version >/dev/null 2>&1; then
   UNIVERSAL=1
   echo "==> Building (universal release)"
   swift build -c release --arch arm64 --arch x86_64
@@ -59,10 +59,16 @@ if [[ "$MODE" == "--release" ]]; then
   : "${APPLE_API_ISSUER:?not set in .env}" "${APPLE_TEAM_ID:?not set in .env}"
 
   # Pick the Developer ID cert by hash so a keychain with several identities is unambiguous.
+  # The `|| true` matters: with `set -e` and pipefail, grep finding nothing would abort the
+  # script right here, with no output at all, instead of reaching the message below.
   IDENTITY="$(security find-identity -v -p codesigning \
-    | grep "Developer ID Application" | grep "$APPLE_TEAM_ID" | head -1 | awk '{print $2}')"
+    | grep "Developer ID Application" | grep "$APPLE_TEAM_ID" | head -1 | awk '{print $2}' \
+    || true)"
   [[ -n "$IDENTITY" ]] || {
     echo "❌ No 'Developer ID Application' certificate for team $APPLE_TEAM_ID in the keychain."
+    echo "   Note that an 'Apple Distribution' certificate is a different thing and cannot be"
+    echo "   used for notarized, directly distributed builds. Identities available:"
+    security find-identity -v -p codesigning | sed 's/^/   /'
     exit 1
   }
 

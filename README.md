@@ -85,6 +85,33 @@ Every layout for a language shares that language's flag: 2-Set Korean, 3-Set Kor
 GongjinCheong Romaja are all 🇰🇷, and you can map any of them to a key. Only nine input sources can
 be mapped at once, one per modifier key.
 
+## Updates
+
+LangKeys checks GitHub for a new release once a day and offers to install it; **Check for
+Updates…** in the menu asks immediately. Turn the daily check off in **Settings → General**.
+
+An update is only installed if it is signed by the same Developer ID team as the copy already
+running *and* passes Gatekeeper, which means Apple notarized it. HTTPS proves the download came
+from GitHub, not that it deserves to replace your app — the signature check is what does that.
+A locally built (ad-hoc signed) LangKeys has no identity to compare against, so it declines to
+update itself; download a release build to get updates.
+
+## Releasing
+
+Tagging pushes a release through `.github/workflows/release.yml`:
+
+```sh
+# bump CFBundleShortVersionString in Resources/Info.plist first — the tag must match
+git tag v1.1 && git push origin v1.1
+```
+
+The workflow builds universal, signs, notarizes, staples, and publishes both the DMG (for people
+installing by hand) and the zip (which the in-app updater downloads). It needs these repository
+secrets: `DEVELOPER_ID_CERTIFICATE_P12` (base64 of the exported .p12), its
+`DEVELOPER_ID_CERTIFICATE_PASSWORD`, plus `APPLE_API_KEY` (the .p8 contents), `APPLE_API_KEY_ID`,
+`APPLE_API_ISSUER`, and `APPLE_TEAM_ID`. `./build.sh --release` produces the same two files
+locally.
+
 ## Build options
 
 ```sh

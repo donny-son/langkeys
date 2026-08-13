@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var prefs = Preferences.shared
+    @ObservedObject var updater = Updater.shared
     @State private var sources: [InputSource] = InputSourceManager.available()
     @State private var isAccessibilityTrusted = AXIsProcessTrusted()
 
@@ -140,6 +141,10 @@ struct SettingsView: View {
 
             Toggle("Open at login", isOn: launchAtLoginBinding)
 
+            Divider()
+
+            updates
+
             Spacer()
 
             HStack {
@@ -149,6 +154,41 @@ struct SettingsView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Updates
+
+    private var updates: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle("Check for updates automatically", isOn: $prefs.checksForUpdates)
+
+            HStack(spacing: 10) {
+                Button("Check Now") { updater.checkNow() }
+                    .disabled(updater.isBusy)
+                Text(updateStatus)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var updateStatus: String {
+        switch updater.state {
+        case .checking:
+            return "Checking…"
+        case .installing:
+            return "Installing…"
+        case .found(let version):
+            return "Version \(version) is available."
+        case .failed(let message):
+            return message
+        case .idle, .upToDate:
+            guard let last = prefs.lastUpdateCheck else {
+                return "Version \(AppVersion.current)."
+            }
+            let stamp = last.formatted(date: .abbreviated, time: .shortened)
+            return "Version \(AppVersion.current) — last checked \(stamp)."
+        }
     }
 
     // MARK: - Bindings

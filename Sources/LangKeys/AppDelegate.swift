@@ -41,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         applyPreferences()
         startTapOrWaitForPermission()
         pinCurrentFlagIfNeeded()
+        Updater.shared.start()
 
         // With no menu bar icon there is nothing to click, so open settings on launch.
         if !Preferences.shared.showsMenuBarIcon {
@@ -69,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         tapController.stop()
+        Updater.shared.stop()
         permissionTimer?.invalidate()
         if let selectionObserver {
             DistributedNotificationCenter.default().removeObserver(selectionObserver)
@@ -226,6 +228,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settings.target = self
         menu.addItem(settings)
 
+        let updates = NSMenuItem(
+            title: Updater.shared.isBusy ? "Checking for Updates…" : "Check for Updates…",
+            action: #selector(checkForUpdates), keyEquivalent: "")
+        updates.target = self
+        updates.isEnabled = !Updater.shared.isBusy
+        menu.addItem(updates)
+
         let quit = NSMenuItem(
             title: "Quit LangKeys", action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q")
@@ -337,6 +346,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func openSettings() {
         settingsController.show()
+    }
+
+    @MainActor @objc private func checkForUpdates() {
+        Updater.shared.checkNow()
     }
 
     @objc private func openAccessibilitySettings() {

@@ -98,6 +98,13 @@ if [[ "$MODE" == "--release" ]]; then
   rm -f build/LangKeys.zip
   xcrun stapler staple "$APP"
 
+  # The zip is what the in-app updater downloads: it unpacks with ditto and needs no
+  # mounting, and it carries the stapled app made just above.
+  ZIP="build/LangKeys-$VERSION.zip"
+  echo "==> Packaging $ZIP"
+  rm -f "$ZIP"
+  ditto -c -k --keepParent "$APP" "$ZIP"
+
   DMG="build/LangKeys-$VERSION.dmg"
   echo "==> Packaging $DMG"
   make_dmg "$DMG"
@@ -108,7 +115,7 @@ if [[ "$MODE" == "--release" ]]; then
   xcrun stapler staple "$DMG"
   spctl -a -t open --context context:primary-signature -v "$DMG"
 
-  echo "==> Done: $DMG (signed, notarized, stapled)"
+  echo "==> Done: $DMG and $ZIP (signed, notarized, stapled)"
   exit 0
 fi
 

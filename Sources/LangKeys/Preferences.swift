@@ -39,12 +39,31 @@ final class Preferences: ObservableObject {
         didSet { store(showsMenuBarIcon, "showMenuBarIcon") }
     }
 
+    /// A daily check against the GitHub releases feed. Only prompts when there is something
+    /// newer than the running version.
+    @Published var checksForUpdates: Bool {
+        didSet { store(checksForUpdates, "checkForUpdates") }
+    }
+
+    /// When the last check actually reached GitHub, so a relaunch does not mean another one.
+    @Published var lastUpdateCheck: Date? {
+        didSet { defaults.set(lastUpdateCheck, forKey: "lastUpdateCheck") }
+    }
+
+    /// A version the user chose to sit out. Manual checks ignore it.
+    @Published var skippedUpdateVersion: String? {
+        didSet { defaults.set(skippedUpdateVersion, forKey: "skippedUpdateVersion") }
+    }
+
     private init() {
         isEnabled = defaults.object(forKey: "enabled") as? Bool ?? true
         showsNotchHUD = defaults.object(forKey: "showNotchHUD") as? Bool ?? true
         flagStaysVisible = defaults.object(forKey: "flagStaysVisible") as? Bool ?? true
         flagDwellSeconds = defaults.object(forKey: "flagDwellSeconds") as? Double ?? 1.3
         showsMenuBarIcon = defaults.object(forKey: "showMenuBarIcon") as? Bool ?? true
+        checksForUpdates = defaults.object(forKey: "checkForUpdates") as? Bool ?? true
+        lastUpdateCheck = defaults.object(forKey: "lastUpdateCheck") as? Date
+        skippedUpdateVersion = defaults.string(forKey: "skippedUpdateVersion")
 
         let storedMappings = defaults.dictionary(forKey: "mappings") as? [String: String] ?? [:]
         for (rawKey, sourceID) in storedMappings {

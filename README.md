@@ -10,41 +10,43 @@ from the menu.
 
 ```sh
 ./build.sh --install     # builds, copies to /Applications, launches
-./build.sh --dmg         # builds, packages build/LangKeys-<version>.dmg
+./build.sh --dmg         # builds an ad-hoc signed DMG, for your own machines
+./build.sh --release     # Developer ID + notarized DMG, for handing to other people
 ./build.sh               # just builds build/LangKeys.app
 ```
 
 Then grant **System Settings → Privacy & Security → Accessibility → LangKeys**. The app polls
 every two seconds, so it starts working as soon as the toggle flips — no relaunch needed.
 
-Because the app is ad-hoc signed, macOS drops that grant whenever the binary changes — expect to
-re-approve it after a rebuild.
+Ad-hoc signed builds lose that grant whenever the binary changes, so expect to re-approve after a
+rebuild. Builds from `--release` keep it, because the signature is stable.
 
 ## Distributing
 
-`./build.sh --dmg` stages the app next to an `/Applications` symlink and runs `hdiutil create`,
-giving the usual drag-to-install window.
+Both DMG modes stage the app next to an `/Applications` symlink and run `hdiutil create`, giving
+the usual drag-to-install window. The difference is the signature:
 
-That DMG is fine for your own machines, but on someone else's Mac Gatekeeper will refuse it
-(ad-hoc signature, not notarized) and they will have to right-click → Open. For real distribution
-you need a paid Apple Developer account, then:
+- `--dmg` is ad-hoc signed. Gatekeeper blocks it on anyone else's Mac (right-click → Open to get
+  around it), so it is only useful locally.
+- `--release` signs with your Developer ID under the hardened runtime, then notarizes. The result
+  passes Gatekeeper cleanly: `spctl -a` reports `source=Notarized Developer ID`.
+
+`--release` reads credentials from a gitignored `.env` (see `.env.example`):
 
 ```sh
-# 1. sign with your Developer ID instead of the ad-hoc `-` identity
-codesign --force --options runtime --timestamp \
-  --sign "Developer ID Application: Your Name (TEAMID)" build/LangKeys.app
-
-# 2. build the DMG, then notarize and staple it
-./build.sh --dmg
-xcrun notarytool submit build/LangKeys-1.0.dmg --keychain-profile "AC_PASSWORD" --wait
-xcrun stapler staple build/LangKeys-1.0.dmg
+APPLE_API_KEY=      # path to the App Store Connect .p8, or the key contents
+APPLE_API_KEY_ID=
+APPLE_API_ISSUER=
+APPLE_TEAM_ID=      # picks the matching Developer ID cert out of your keychain
 ```
 
-Store the credentials once with
-`xcrun notarytool store-credentials "AC_PASSWORD" --apple-id … --team-id … --password …`
-(an app-specific password).
+If `APPLE_API_KEY` holds the key text rather than a path, it is written to a `umask 077` temp file
+and deleted on exit. The signing certificate is selected by SHA-1 hash, so a keychain holding
+several identities stays unambiguous.
 
-Signing with a real Developer ID also makes the Accessibility grant stick across updates.
+Notarization runs in **two passes**: the app is submitted and stapled first, then the DMG is built
+from the stapled app, signed, submitted, and stapled in turn. Stapling only the DMG would leave an
+app that fails to launch when it is copied out and first run offline.
 
 ## Using it
 
